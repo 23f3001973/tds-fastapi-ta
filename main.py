@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 import pandas as pd
 
@@ -25,7 +26,7 @@ class Question(BaseModel):
 @app.post("/api/")
 def answer_query(payload: Question):
     q = payload.question.lower()
-    
+
     # Search in discourse data
     discourse_matches = discourse_df[
         discourse_df.apply(
@@ -33,7 +34,7 @@ def answer_query(payload: Question):
             axis=1
         )
     ]
-    
+
     # Search in timetable data
     timetable_matches = tds_df[
         tds_df.apply(
@@ -41,7 +42,7 @@ def answer_query(payload: Question):
             axis=1
         )
     ]
-    
+
     # Return discourse results first
     if not discourse_matches.empty:
         best = discourse_matches.iloc[0]
@@ -51,7 +52,7 @@ def answer_query(payload: Question):
             "title": str(best.get('title', 'Untitled')),
             "links": [{"url": str(best.get('slug', '#')), "text": "See discussion"}]
         }
-    
+
     # Return timetable results if no discourse matches
     elif not timetable_matches.empty:
         best = timetable_matches.iloc[0]
@@ -61,7 +62,7 @@ def answer_query(payload: Question):
             "title": str(best.get('title', 'Course Information')),
             "links": []
         }
-    
+
     else:
         return {
             "answer": "Sorry, I couldn't find anything relevant in the forum discussions or timetable.",
@@ -79,3 +80,17 @@ def root():
         "timetable_entries": len(tds_df),
         "docs": "/docs"
     }
+
+# ✅ HTML root route for browsers/monitors
+@app.get("/", response_class=HTMLResponse)
+def homepage():
+    return """
+    <html>
+      <head><title>TDS FastAPI TA</title></head>
+      <body>
+        <h1>TDS Assistant API is Live ✅</h1>
+        <p>Use <code>POST /api/</code> to send your questions.</p>
+        <p>Visit <a href='/docs'>/docs</a> to test it directly.</p>
+      </body>
+    </html>
+    """
