@@ -1,0 +1,21 @@
+prompts:
+  - prompt: >
+      The question asks to use gpt-3.5-turbo-0125 model but the ai-proxy provided by Anand sir only supports gpt-4o-mini. So should we just use gpt-4o-mini or use the OpenAI API for gpt3.5 turbo?
+
+providers:
+  - id: fastapi-ta
+    base_url: https://tds-fastapi-ta.onrender.com/api
+    method: POST
+    headers:
+      Authorization: Bearer dummy-token
+      Content-Type: application/json
+    body:
+      prompt: "{{prompt}}"
+
+tests:
+  - vars:
+      prompt: >
+        The question asks to use gpt-3.5-turbo-0125 model but the ai-proxy provided by Anand sir only supports gpt-4o-mini. So should we just use gpt-4o-mini or use the OpenAI API for gpt3.5 turbo?
+    assert:
+      - type: contains
+        value: https://discourse.onlinegneeet.in/ijg45-question-id-clarification/155939
