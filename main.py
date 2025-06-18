@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
@@ -6,17 +6,20 @@ import pandas as pd
 
 app = FastAPI()
 
+# CORS for all origins
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Load CSVs
+# Load data
 discourse_df = pd.read_csv("discourse_data.csv")
 tds_df = pd.read_csv("tds_timetable_2025.csv")
 
+# Request schema
 class Question(BaseModel):
     question: str
     attachments: list = []
@@ -25,52 +28,58 @@ class Question(BaseModel):
 def answer_query(payload: Question):
     q = payload.question.lower()
 
-    # forum search
-    forum = discourse_df[
+    # Search in discourse
+    discourse_matches = discourse_df[
         discourse_df.apply(
-            lambda row: any(q in str(row[col]).lower() for col in ['title','excerpt'] if pd.notna(row[col])),
+            lambda row: any(q in str(row[col]).lower() for col in ['title', 'excerpt'] if pd.notna(row[col])), 
             axis=1
         )
     ]
-    if not forum.empty:
-        best = forum.iloc[0]
+
+    # Search in timetable
+    timetable_matches = tds_df[
+        tds_df.apply(
+            lambda row: any(q in str(row[col]).lower() for col in tds_df.columns if pd.notna(row[col])), 
+            axis=1
+        )
+    ]
+
+    # Return matched results
+    if not discourse_matches.empty:
+        best = discourse_matches.iloc[0]
         return {
-            "answer": best.get('excerpt', best.get('title','')),
+            "answer": str(best.get('excerpt', best.get('title', 'No content available'))),
             "source": "Forum Discussion",
-            "title": best.get('title',''),
-            "links": [{"url": best.get('slug','#'), "text":"See discussion"}]
+            "title": str(best.get('title', 'Untitled')),
+            "links": [{"url": str(best.get('slug', '#')), "text": "See discussion"}]
         }
 
-    # timetable search
-    tt = tds_df[
-        tds_df.apply(
-            lambda row: any(q in str(row[col]).lower() for col in tds_df.columns if pd.notna(row[col])),
-            axis=1
-        )
-    ]
-    if not tt.empty:
-        b = tt.iloc[0]
+    elif not timetable_matches.empty:
+        best = timetable_matches.iloc[0]
         return {
-            "answer": f"{b['title']} by {b['instructor']} at {b['slot']} in {b['venue']}",
+            "answer": f"Course: {best.get('title', 'N/A')} | Instructor: {best.get('instructor', 'N/A')} | Time: {best.get('slot', 'N/A')} | Venue: {best.get('venue', 'N/A')}",
             "source": "Timetable",
-            "title": b['title'],
+            "title": str(best.get('title', 'Course Information')),
             "links": []
         }
 
-    return {
-        "answer": "Sorry, nothing found.",
-        "source": "No matches",
-        "title": "No Results",
-        "links": []
-    }
+    else:
+        return {
+            "answer": "Sorry, I couldn't find anything relevant in the forum discussions or timetable.",
+            "source": "No matches",
+            "title": "No Results",
+            "links": []
+        }
 
 @app.get("/", response_class=HTMLResponse)
 def homepage():
     return """
-    <h1>TDS Assistant API is Live</h1>
-    <p>POST to /api/ with JSON {"question": "..."} to query.</p>
+    <html>
+      <head><title>TDS FastAPI TA</title></head>
+      <body>
+        <h1>TDS Assistant API is Live ✅</h1>
+        <p>Use <code>POST /api/</code> to send your questions.</p>
+        <p>Visit <a href='/docs'>/docs</a> to test it directly.</p>
+      </body>
+    </html>
     """
-
-@app.get("/docs")
-def swagger_redirect():
-    return HTMLResponse('<script>window.location="/docs"</script>')
